@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duck Shooter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Comic+Sans+MS&amp;display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: #87CEEB; 
+      font-family: 'Comic Sans MS', cursive, sans-serif; 
+      color: white; 
+    }
+    canvas { 
+      display: block; 
+      background: linear-gradient(to bottom, #87CEEB, #f0f9ff); 
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px;
+      border-radius: 10px;
+      border: 3px solid #FFD700;
+      font-size: 16px;
+    }
+    #helpBox {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 3px solid #FFD700;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    #touchControls {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      z-index: 5;
+    }
+    .btn {
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.3);
+      border: 3px solid #FFD700;
+      border-radius: 50%;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    #gameOver {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      border: 5px solid #FFD700;
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+      display: none;
+      z-index: 20;
+    }
+    #gameOver button {
+      background: #FFD700;
+      border: none;
+      padding: 10px 20px;
+      margin-top: 15px;
+      border-radius: 10px;
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .powerup-text {
+      position: absolute;
+      font-size: 20px;
+      font-weight: bold;
+      color: #FFD700;
+      text-shadow: 2px 2px 2px black;
+      animation: float 1s ease-out;
+    }
+    @keyframes float {
+      0% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(-30px); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="ui">
+    <div id="score">
+      Score: 0
+    </div>
+    <div id="combo">
+      Combo: 0
+    </div>
+    <div id="wave">
+      Wave: 1
+    </div>
+    <div id="bread">
+      Bread: 1
+    </div>
+  </div>
+  <div id="helpBox">
+    <strong>PC Controls:</strong><br>
+    ⬅ Left Arrow – Move Left<br>
+    ➡ Right Arrow – Move Right<br>
+    ⬆ Up Arrow – Move Up<br>
+    ⬇ Down Arrow – Move Down<br>
+  </div>
+  <div id="touchControls">
+    <div class="btn" id="leftBtn">
+      ⟵
+    </div>
+    <div class="btn" id="rightBtn">
+      ⟶
+    </div>
+	<div class="btn" id="upBtn">
+	  ⬆️
+	</div>
+    <div class="btn" id="downBtn">
+	  ⬇️
+	</div>
+  </div>
+  <div id="gameOver">
+    <h2>GAME OVER!</h2>
+    <p id="finalScore">Score: 0</p>
+    <p id="finalWave">Wave: 1</p>
+    <p>You got attacked by too many angry ducks!</p><button id="restartBtn">Play Again</button>
+  </div>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Game sounds
+    const sounds = {
+      shoot: new Audio("https://www.soundjay.com/buttons/sounds/button-09.mp3"),
+      hit: new Audio("https://www.soundjay.com/misc/sounds/bell-ring-01.mp3"),
+      powerup: new Audio("https://www.soundjay.com/buttons/sounds/button-35.mp3"),
+      quack: new Audio("https://www.soundjay.com/nature/sounds/duck-quack-01.mp3"),
+      gameOver: new Audio("https://www.soundjay.com/misc/sounds/fail-trombone-01.mp3")
+    };
+
+    // Preload images
+    const images = {
+      player: new Image(),
+      enemy: new Image(),
+      boss: new Image(),
+      bread: new Image(),
+      egg: new Image(),
+      powerup: new Image(),
+      cloud1: new Image(),
+      cloud2: new Image()
+    };
+    
+    // Set image sources
+    images.player.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjODg4IiBkPSJNMjI0IDMyYzEwNi40IDAgMTkyIDg1LjYgMTkyIDE5MnMtODUuNiAxOTItMTkyIDE5MlMzMiAzMzAuNCAzMiAyMjQgMTE3LjYgMzIgMjI0IDMyeiIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0yMjQgNDhDMTI2LjQgNDggNDggMTI2LjQgNDggMjI0czc4LjQgMTc2IDE3NiAxNzZjOTcuNiAwIDE3Ni03OC40IDE3Ni0xNzZTMzIxLjYgNDggMjI0IDQ4eiIvPjxwYXRoIGZpbGw9IiMxMTEiIGQ9Ik0yODggMTc2YzAgMTcuNi0xNC40IDMyLTMyIDMycy0zMi0xNC40LTMyLTMyIDE0LjQtMzIgMzItMzIgMzIgMTQuNCAzMiAzMnptLTExMiAwYzAgMTcuNi0xNC40IDMyLTMyIDMycy0zMi0xNC40LTMyLTMyIDE0LjQtMzIgMzItMzIgMzIgMTQuNCAzMiAzMnptMTYgMTEyYzAgOC44LTcuMiAxNi0xNiAxNnMtMTYtNy4yLTE2LTE2IDcuMi0xNiAxNi0xNiAxNiA3LjIgMTYgMTZ6Ii8+PHBhdGggZmlsbD0iI2Y4ZDA0MCIgZD0iTTM1MiAzMjBjMC0yNi41LTIxLjUtNDgtNDgtNDhIMTQ0Yy0yNi41IDAtNDggMjEuNS00OCA0OGg4YzAgMjYuNSAyMS41IDQ4IDQ4IDQ4aDE2MGMyNi41IDAgNDgtMjEuNSA0OC00OGg4eiIvPjwvc3ZnPg==";
+    images.enemy.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjODg3NzAwIiBkPSJNMCA2NEMwIDI4LjcgMjguNyAwIDY0IDBIMTkyYzM1LjMgMCA2NCAyOC43IDY0IDY0djY0YzAgMzUuMy0yOC43IDY0LTY0IDY0SDY0Yy0zNS4zIDAtNjQtMjguNy02NC02NFY2NHoiLz48cGF0aCBmaWxsPSIjZmZjYzAwIiBkPSJNMTYgNjRDMTYgMzcuNSAzNy41IDE2IDY0IDE2aDE5MmMyNi41IDAgNDggMjEuNSA0OCA0OHYxNmgtODBjLTguOCAwLTE2IDcuMi0xNiAxNnY2NEgxNlY2NHoiLz48cGF0aCBmaWxsPSIjZmY2NjAwIiBkPSJNMjA4IDExMmMwLTguOCA3LjItMTYgMTYtMTZIMjcyYzguOCAwIDE2IDcuMiAxNiAxNnYxMjhoLTgwVjExMnoiLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNOTYgNDhDODIuNyA0OCA3MiA1OC43IDcyIDcyczEwLjcgMjQgMjQgMjQgMjQtMTAuNyAyNC0yNFMxMDkuMyA0OCA5NiA0OHpNMzIgMTEyYzAtOC44IDcuMi0xNiAxNi0xNkg2NGM4LjggMCAxNiA3LjIgMTYgMTZ2MTZjMCA4LjgtNy4yIDE2LTE2IDE2SDQ4Yy04LjggMC0xNi03LjItMTYtMTZ2LTE2eiIvPjxwYXRoIGZpbGw9IiMwMDAwMDAiIGQ9Ik05NiA4MGM0LjQgMCA4LTMuNiA4LThzLTMuNi04LTgtOC04IDMuNi04IDggMy42IDggOCA4eiIvPjwvc3ZnPg==";
+    images.boss.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjODg3NzAwIiBkPSJNMCA2NEMwIDI4LjcgMjguNyAwIDY0IDBIMTkyYzM1LjMgMCA2NCAyOC43IDY0IDY0djY0YzAgMzUuMy0yOC43IDY0LTY0IDY0SDY0Yy0zNS4zIDAtNjQtMjguNy02NC02NFY2NHoiLz48cGF0aCBmaWxsPSIjZmY4ODAwIiBkPSJNMTYgNjRDMTYgMzcuNSAzNy41IDE2IDY0IDE2aDE5MmMyNi41IDAgNDggMjEuNSA0OCA0OHYxNmgtODBjLTguOCAwLTE2IDcuMi0xNiAxNnY2NEgxNlY2NHoiLz48cGF0aCBmaWxsPSIjZmYwMDAwIiBkPSJNMjA4IDExMmMwLTguOCA3LjItMTYgMTYtMTZIMjcyYzguOCAwIDE2IDcuMiAxNiAxNnYxMjhoLTgwVjExMnoiLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNOTYgNDhDODIuNyA0OCA3MiA1OC43IDcyIDcyczEwLjcgMjQgMjQgMjQgMjQtMTAuNyAyNC0yNFMxMDkuMyA0OCA5NiA0OHpNMzIgMTEyYzAtOC44IDcuMi0xNiAxNi0xNkg2NGM4LjggMCAxNiA3LjIgMTYgMTZ2MTZjMCA4LjgtNy4yIDE2LTE2IDE2SDQ4Yy04LjggMC0xNi03LjItMTYtMTZ2LTE2eiIvPjxwYXRoIGZpbGw9IiMwMDAwMDAiIGQ9Ik05NiA4MGM0LjQgMCA4LTMuNiA4LThzLTMuNi04LTgtOC04IDMuNi04IDggMy42IDggOCA4ek0zMiAxMTJjMC04LjggNy4yLTE2IDE2LTE2SDY0YzguOCAwIDE2IDcuMiAxNiAxNnYxNmMwIDguOC03LjIgMTYtMTYgMTZINDhjLTguOCAwLTE2LTcuMi0xNi0xNnYtMTZ6Ii8+PC9zdmc+";
+    images.bread.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZjVkZWI5IiBkPSJNMCA5NkMwIDYwLjcgMjguNyAzMiA2NCAzMkgzODRjMzUuMyAwIDY0IDI4LjcgNjQgNjR2MjI0YzAgMzUuMy0yOC43IDY0LTY0IDY0SDY0Yy0zNS4zIDAtNjQtMjguNy02NC02NFY5NnoiLz48cGF0aCBmaWxsPSIjZGViODg3IiBkPSJNMCA5NkMwIDYwLjcgMjguNyAzMiA2NCAzMkgzMjB2MzIwSDY0Yy0zNS4zIDAtNjQtMjguNy02NC02NFY5NnoiLz48cGF0aCBmaWxsPSIjZTVjOTlkIiBkPSJNMCA5NkMwIDYwLjcgMjguNyAzMiA2NCAzMkgzODRjMzUuMyAwIDY0IDI4LjcgNjQgNjR2NjRINjR2MTYwYy0zNS4zIDAtNjQtMjguNy02NC02NFY5NnoiLz48cGF0aCBmaWxsPSIjYzQ5YTc2IiBkPSJNMCAxNjBDMCA5Ni4gMjguNyA2NCA2NCA2NEgzODRjMzUuMyAwIDY0IDMyLjEgNjQgOTZ2MzJIMFYxNjB6Ii8+PC9zdmc+";
+    images.egg.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZWxsaXBzZSBjeD0iMjU2IiBjeT0iMjU2IiByeD0iODAiIHJ5PSIxMjAiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiNlZWVlZWU7c3Ryb2tlLXdpZHRoOjhweCIgLz48L3N2Zz4=";
+    images.powerup.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZjVkZWI5IiBkPSJNMTYwIDMySDM1MnY0NDhIMTYwVjMyeiIvPjxwYXRoIGZpbGw9IiNlNWM5OWQiIGQ9Ik0xNjAgNDgwVjMyaDE5MnYxNDBIMTYwdjMwOHoiLz48cGF0aCBmaWxsPSIjYzQ5YTc2IiBkPSJNMTYwIDE3MmgxOTJ2MTcwSDE2MFYxNzJ6Ii8+PHBhdGggZmlsbD0iI2Y1ZGViOSIgZD0iTTMyIDMyMGg0NDh2MTYwSDMyVjMyMHoiLz48L3N2Zz4=";
+    images.cloud1.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMTAwIj48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNNTAgNTBjMC0yMCAxNi4zLTM1IDM1LTM1IDE2LjkgMCAzMSAxMSAzNC44IDI2LjggMS42LS41IDMuMy0uOCA1LjItLjggOS42IDAgMTcuNyA2LjcgMTkuNyAxNS43IDYgMS44IDEwLjMgNy4xIDEwLjMgMTMuMyAwIDcuNy02LjMgMTQtMTQgMTRoLTkxYy0xNi41IDAtMzAtMTMuNS0zMC0zMHMxMy41LTMwIDMwLTMwWiIvPjwvc3ZnPg==";
+    images.cloud2.src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgODAiPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGQ9Ik0zMCAzOGMwLTEzIDkuNC0yNCAyMi0yNCAxMiAwIDIyIDkgMjIgMjEgNCAwIDcuMiAyLjMgOC44IDUuNSA0IC42IDcuMiA0IDcuMiA4LjUgMCA1LTQgOS05IDloLTYwYy0xMSAwLTIwLTktMjAtMjBzOS0yMCAyMC0yMFoiLz48L3N2Zz4=";
+
+    class GameObject {
+      constructor(x, y, w, h, color = "white", image = null) {
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+        this.color = color;
+        this.image = image;
+        this.opacity = 1;
+      }
+      draw() {
+        ctx.globalAlpha = this.opacity;
+        if (this.image) {
+          ctx.drawImage(this.image, this.x, this.y, this.w, this.h);
+        } else {
+          ctx.fillStyle = this.color;
+          ctx.fillRect(this.x, this.y, this.w, this.h);
+        }
+        ctx.globalAlpha = 1;
+      }
+      collidesWith(other) {
+        return (
+          this.x < other.x + other.w &&
+          this.x + this.w > other.x &&
+          this.y < other.y + other.h &&
+          this.y + this.h > other.y
+        );
+      }
+    }
+	
+	// Add auto-shooting functionality
+    let autoShootInterval;
+
+    function startAutoShooting() {
+        // Clear any existing interval first
+        stopAutoShooting();
+  
+        // Set up automatic shooting every 500ms (adjust timing as needed)
+        autoShootInterval = setInterval(() => {
+            if (!isGameOver && player) {
+                player.shoot();
+            }
+        }, 500);
+    }
+
+    function stopAutoShooting() {
+        if (autoShootInterval) {
+            clearInterval(autoShootInterval);
+        }
+    }
+
+    class Breadman extends GameObject {
+      constructor() {
+        super(canvas.width / 2 - 30, canvas.height - 100, 60, 60, "#0ff", images.player);
+        this.breads = [];
+        this.cooldown = false;
+        this.cooldownTime = 300;  // Default cooldown time in ms
+        this.breadCount = 1;      // Number of bread slices to shoot
+        this.lives = 3;
+        this.invincible = false;
+      }
+      
+      shoot() {
+        if (!this.cooldown && this.breadCount > 0) {
+          // Play sound
+          sounds.shoot.currentTime = 0;
+          sounds.shoot.play();
+          
+          // Determine how many breads to shoot (1 or 3 based on powerup)
+          const breadCount = this.breadCount > 2 ? 3 : 1;
+          
+          if (breadCount === 1) {
+            // Single bread
+            this.breads.push(new GameObject(
+              this.x + this.w / 2 - 5, 
+              this.y, 
+              30, 
+              30, 
+              "yellow", 
+              images.bread
+            ));
+          } else {
+            // Triple bread
+            for (let i = -1; i <= 1; i++) {
+              this.breads.push(new GameObject(
+                this.x + this.w / 2 - 15 + i * 20, 
+                this.y + i * 5, 
+                30, 
+                30, 
+                "yellow", 
+                images.bread
+              ));
+            }
+          }
+          
+          this.cooldown = true;
+          this.breadCount--;
+          document.getElementById("bread").innerText = "Bread: " + this.breadCount;
+          
+          setTimeout(() => {
+            this.cooldown = false;
+            // Refill bread after cooldown
+            if (this.breadCount <= 0) {
+              this.breadCount = 1;
+              document.getElementById("bread").innerText = "Bread: " + this.breadCount;
+            }
+          }, this.cooldownTime);
+        }
+      }
+      
+      move(dir) {
+        if (dir === "left" && this.x > 0) this.x -= 12;
+        if (dir === "right" && this.x + this.w < canvas.width) this.x += 12;
+		if (dir === "up" && this.y > canvas.height / 2) this.y -= 12;
+        if (dir === "down" && this.y + this.h < canvas.height) this.y += 12;
+      }
+      
+      hit() {
+        if (!this.invincible) {
+          this.lives--;
+          if (this.lives <= 0) {
+            return true; // Game over
+          }
+          
+          // Make player briefly invincible
+          this.invincible = true;
+          this.flash();
+          setTimeout(() => {
+            this.invincible = false;
+            this.opacity = 1;
+          }, 2000);
+        }
+        return false;
+      }
+      
+      flash() {
+        let flashCount = 0;
+        const flashInterval = setInterval(() => {
+          this.opacity = this.opacity === 1 ? 0.3 : 1;
+          flashCount++;
+          if (flashCount >= 10) {
+            clearInterval(flashInterval);
+            this.opacity = 1;
+          }
+        }, 200);
+      }
+    }
+
+    class Cloud extends GameObject {
+      constructor(x, y, w, h, speed, image) {
+        super(x, y, w, h, "white", image);
+        this.speed = speed;
+      }
+      
+      update() {
+        this.x -= this.speed;
+        if (this.x + this.w < 0) {
+          this.x = canvas.width;
+          this.y = Math.random() * canvas.height / 3;
+        }
+      }
+    }
+
+    class Duck extends GameObject {
+      constructor(x, y, w, h, speedX = 0, speedY = 1.5) {
+        super(x, y, w, h, "red", images.enemy);
+        this.speedX = speedX;
+        this.speedY = speedY;
+        this.shootTimer = Math.random() * 3000;
+        this.quackTimer = Math.random() * 5000 + 2000;
+        this.scared = false;
+      }
+      
+      update() {
+        this.y += this.speedY;
+        this.x += this.speedX;
+        
+        // Bounce off the edges
+        if (this.speedX !== 0) {
+          if (this.x <= 0 || this.x + this.w >= canvas.width) {
+            this.speedX = -this.speedX;
+          }
+        }
+        
+        this.shootTimer -= 16;
+        this.quackTimer -= 16;
+        
+        if (this.quackTimer <= 0) {
+          sounds.quack.volume = 0.3;
+          sounds.quack.currentTime = 0;
+          sounds.quack.play();
+          this.quackTimer = Math.random() * 7000 + 3000;
+        }
+        
+        return this.shootTimer <= 0;
+      }
+      
+      resetShootTimer() {
+        this.shootTimer = 2000 + Math.random() * 3000;
+      }
+      
+      scare() {
+        if (!this.scared) {
+          this.scared = true;
+          this.speedY = -this.speedY * 2;
+          setTimeout(() => { 
+            this.scared = false;
+            this.speedY = Math.abs(this.speedY) / 2;
+          }, 1000);
+        }
+      }
+    }
+
+    class BossDuck extends GameObject {
+      constructor() {
+        const w = 120;
+        const h = 120;
+        super(canvas.width / 2 - w/2, 40, w, h, "purple", images.boss);
+        this.hp = 20;
+        this.maxHp = 20;
+        this.speedX = 3;
+        this.shootTimer = 1000;
+        this.quackTimer = 2000;
+        this.chargeTimer = 8000;
+        this.charging = false;
+        this.flashTimer = 0;
+      }
+      
+      update() {
+        this.x += this.speedX;
+        
+        if (this.x <= 0 || this.x + this.w >= canvas.width) {
+          this.speedX = -this.speedX;
+        }
+        
+        this.shootTimer -= 16;
+        this.quackTimer -= 16;
+        this.chargeTimer -= 16;
+        
+        if (this.flashTimer > 0) {
+          this.flashTimer -= 16;
+          this.opacity = this.flashTimer % 100 < 50 ? 1 : 0.5;
+        } else {
+          this.opacity = 1;
+        }
+        
+        if (this.quackTimer <= 0) {
+          sounds.quack.volume = 0.5;
+          sounds.quack.currentTime = 0;
+          sounds.quack.play();
+          this.quackTimer = Math.random() * 3000 + 1000;
+        }
+        
+        if (this.chargeTimer <= 0 && !this.charging) {
+          this.charging = true;
+          const originalSpeed = this.speedX;
+          this.speedX = 0;
+          setTimeout(() => {
+            sounds.quack.volume = 0.8;
+            sounds.quack.play();
+            this.speedX = (Math.random() > 0.5 ? 8 : -8);
+            setTimeout(() => {
+              this.speedX = originalSpeed;
+              this.charging = false;
+              this.chargeTimer = 8000 + Math.random() * 4000;
+            }, 1500);
+          }, 1000);
+        }
+        
+        return this.shootTimer <= 0;
+      }
+      
+      resetShootTimer() {
+        this.shootTimer = 400 + Math.random() * 600;
+      }
+      
+      hit() {
+        this.hp--;
+        this.flashTimer = 500;
+        return this.hp <= 0;
+      }
+      
+      draw() {
+        super.draw();
+        
+        // Draw health bar
+        const barWidth = this.w;
+        const barHeight = 10;
+        const healthPercentage = this.hp / this.maxHp;
+        
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+        ctx.fillRect(this.x, this.y - 15, barWidth, barHeight);
+        
+        // Health bar color changes based on remaining health
+        if (healthPercentage > 0.6) {
+          ctx.fillStyle = "green";
+        } else if (healthPercentage > 0.3) {
+          ctx.fillStyle = "yellow";
+        } else {
+          ctx.fillStyle = "red";
+        }
+        
+        ctx.fillRect(this.x, this.y - 15, barWidth * healthPercentage, barHeight);
+      }
+    }
+
+    class Powerup extends GameObject {
+      constructor(x, y) {
+        super(x, y, 30, 30, "gold", images.powerup);
+        this.speedY = 2;
+        this.type = Math.random() > 0.5 ? "tripleBread" : "fastReload";
+      }
+      
+      update() {
+        this.y += this.speedY;
+        return this.y > canvas.height;
+      }
+    }
+
+    class Egg extends GameObject {
+      constructor(x, y, speedX = 0, speedY = 5) {
+        super(x, y, 20, 25, "white", images.egg);
+        this.speedX = speedX;
+        this.speedY = speedY;
+      }
+      
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        return this.y > canvas.height;
+      }
+    }
+
+    // Game state variables
+    let player;
+    let ducks = [];
+    let powerups = [];
+    let eggs = [];
+    let boss = null;
+    let score = 0;
+    let combo = 0;
+    let comboTimer = 0;
+    let wave = 1;
+    let isGameOver = false;
+    let clouds = [];
+
+    // Game loop variables
+    let lastTime = 0;
+    let spawnTimer = 0;
+    let spawnInterval = 1000;
+
+    // Controls
+    const keys = {
+      left: false,
+      right: false,
+      up: false,
+      down: false
+    };
+
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "ArrowLeft") keys.left = true;
+      if (e.code === "ArrowRight") keys.right = true;
+      if (e.code === "ArrowUp") keys.up = true;
+      if (e.code === "ArrowDown") keys.down = true;
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "ArrowLeft") keys.left = false;
+      if (e.code === "ArrowRight") keys.right = false;
+      if (e.code === "ArrowUp") keys.up = false;
+      if (e.code === "ArrowDown") keys.down = false;
+    });
+
+    // Mobile controls
+    document.getElementById("leftBtn").addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      keys.left = true;
+    });
+
+    document.getElementById("rightBtn").addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      keys.right = true;
+    });
+
+    document.getElementById("leftBtn").addEventListener("touchend", () => {
+      keys.left = false;
+    });
+
+    document.getElementById("rightBtn").addEventListener("touchend", () => {
+      keys.right = false;
+    });
+
+    document.getElementById("upBtn").addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      keys.left = true;
+    });
+	
+	document.getElementById("downBtn").addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      keys.left = true;
+    });
+	
+    document.getElementById("upBtn").addEventListener("touchend", () => {
+      keys.left = false;
+    });
+	
+    document.getElementById("downBtn").addEventListener("touchend", () => {
+      keys.left = false;
+    });
+	
+	document.getElementById("restartBtn").addEventListener("click", () => {
+      resetGame();
+	});
+
+    function spawnDuck() {
+      const duckSize = Math.floor(Math.random() * 20) + 40;
+      const x = Math.random() * (canvas.width - duckSize);
+      const speedX = Math.random() > 0.7 ? (Math.random() - 0.5) * 3 : 0;
+      const duck = new Duck(x, -duckSize, duckSize, duckSize, speedX);
+      ducks.push(duck);
+    }
+
+    function spawnBoss() {
+      boss = new BossDuck();
+      // Play special effect here if needed
+    }
+
+    function showPowerupText(type, x, y) {
+      const div = document.createElement("div");
+      div.className = "powerup-text";
+      div.innerText = type === "tripleBread" ? "Triple Bread!" : "Fast Reload!";
+      div.style.left = `${x}px`;
+      div.style.top = `${y}px`;
+      document.body.appendChild(div);
+      
+      setTimeout(() => {
+        document.body.removeChild(div);
+      }, 1000);
+    }
+
+    function activatePowerup(powerup) {
+      sounds.powerup.currentTime = 0;
+      sounds.powerup.play();
+      
+      if (powerup.type === "tripleBread") {
+        player.breadCount = 3;
+        document.getElementById("bread").innerText = "Bread: " + player.breadCount;
+        showPowerupText("tripleBread", powerup.x, powerup.y);
+      } else if (powerup.type === "fastReload") {
+        const originalCooldown = player.cooldownTime;
+        player.cooldownTime = 100;
+        showPowerupText("fastReload", powerup.x, powerup.y);
+        
+        setTimeout(() => {
+          player.cooldownTime = originalCooldown;
+        }, 8000);
+      }
+    }
+
+    function resetGame() {
+      player = new Breadman();
+      ducks = [];
+      eggs = [];
+      powerups = [];
+      boss = null;
+      score = 0;
+      combo = 0;
+      comboTimer = 0;
+      wave = 1;
+      spawnTimer = 0;
+      spawnInterval = 1500;
+      isGameOver = false;
+      
+      document.getElementById("score").innerText = "Score: 0";
+      document.getElementById("combo").innerText = "Combo: 0";
+      document.getElementById("wave").innerText = "Wave: 1";
+      document.getElementById("bread").innerText = "Bread: 1";
+      document.getElementById("gameOver").style.display = "none";
+      
+      // Initialize clouds
+      clouds = [
+        new Cloud(-200, 50, 300, 100, 0.5, images.cloud1),
+        new Cloud(300, 120, 200, 80, 0.3, images.cloud2),
+        new Cloud(canvas.width, 40, 250, 90, 0.4, images.cloud1)
+      ];
+      
+	  // Start auto-shooting
+      startAutoShooting();
+	  
+      loop(0);
+    }
+
+    function gameOver() {
+      isGameOver = true;
+	  stopAutoShooting();
+      sounds.gameOver.play();
+      document.getElementById("finalScore").innerText = "Score: " + score;
+      document.getElementById("finalWave").innerText = "Wave: " + wave;
+      document.getElementById("gameOver").style.display = "block";
+    }
+
+    function loop(timestamp) {
+      const dt = timestamp - lastTime;
+      lastTime = timestamp;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Update and draw clouds
+      for (const cloud of clouds) {
+        cloud.update();
+        cloud.draw();
+      }
+      
+      // Skip rest of updates if game is over
+      if (isGameOver) {
+        player.draw();
+        return;
+      }
+      
+      // Handle player movement from keys
+      if (keys.left) player.move("left");
+      if (keys.right) player.move("right");
+	  if (keys.up) player.move("up");
+	  if (keys.down) player.move("down");
+      
+      // Update combo timer
+      if (comboTimer > 0) {
+        comboTimer -= dt;
+        if (comboTimer <= 0) {
+          combo = 0;
+          document.getElementById("combo").innerText = "Combo: " + combo;
+        }
+      }
+      
+      // Spawn logic
+      spawnTimer += dt;
+      if (spawnTimer >= spawnInterval) {
+        spawnTimer = 0;
+        spawnInterval = Math.max(500, 1500 - wave * 100);
+        
+        if (wave % 5 === 0 && boss === null && ducks.length === 0) {
+          spawnBoss();
+        } else if (boss === null) {
+          if (Math.random() < 0.8) {  // 80% chance to spawn duck
+            const duckCount = Math.min(3, Math.floor(wave / 3) + 1);
+            for (let i = 0; i < duckCount; i++) {
+              spawnDuck();
+            }
+          }
+        }
+      }
+      
+      // Update and draw player
+      player.draw();
+      
+      // Update and draw boss if exists
+      if (boss) {
+        const shouldShoot = boss.update();
+        if (shouldShoot) {
+          // Boss shoots more eggs at once
+          const eggCount = Math.min(3, Math.floor(wave / 5) + 1);
+          for (let i = 0; i < eggCount; i++) {
+            const offsetX = (i - 1) * 30;
+            eggs.push(new Egg(
+              boss.x + boss.w / 2 - 10 + offsetX, 
+              boss.y + boss.h, 
+              (Math.random() - 0.5) * 3, 
+              6
+            ));
+          }
+          boss.resetShootTimer();
+        }
+        boss.draw();
+      }
+      
+      // Update and draw ducks
+      for (let i = ducks.length - 1; i >= 0; i--) {
+        const duck = ducks[i];
+        const shouldShoot = duck.update();
+        duck.draw();
+        
+        // Duck shooting logic
+        if (shouldShoot && !duck.scared) {
+          eggs.push(new Egg(duck.x + duck.w / 2 - 10, duck.y + duck.h));
+          duck.resetShootTimer();
+        }
+        
+        // Check if duck reached bottom
+        if (duck.y > canvas.height) {
+          ducks.splice(i, 1);
+          if (player.hit()) {
+            gameOver();
+            return;
+          }
+        }
+      }
+      
+      // Update and draw bread projectiles
+      for (let i = player.breads.length - 1; i >= 0; i--) {
+        const bread = player.breads[i];
+        bread.y -= 10;
+        bread.draw();
+        
+        // Remove bread if off screen
+        if (bread.y + bread.h < 0) {
+          player.breads.splice(i, 1);
+          continue;
+        }
+        
+        // Check for hit on boss
+        if (boss && bread.collidesWith(boss)) {
+          sounds.hit.currentTime = 0;
+          sounds.hit.play();
+          
+          const killed = boss.hit();
+          if (killed) {
+            score += 500 * wave;
+            document.getElementById("score").innerText = "Score: " + score;
+            
+            // Drop multiple powerups when boss is defeated
+            for (let j = 0; j < 3; j++) {
+              powerups.push(new Powerup(
+                boss.x + boss.w * Math.random(),
+                boss.y + boss.h * Math.random()
+              ));
+            }
+            
+            boss = null;
+            wave++;
+            document.getElementById("wave").innerText = "Wave: " + wave;
+          }
+          
+          player.breads.splice(i, 1);
+          continue;
+        }
+        
+        // Check for hits on ducks
+        for (let j = ducks.length - 1; j >= 0; j--) {
+          const duck = ducks[j];
+          if (bread.collidesWith(duck)) {
+            player.breads.splice(i, 1);
+            ducks.splice(j, 1);
+            
+            // Chance to drop powerup
+            if (Math.random() < 0.3) {
+              powerups.push(new Powerup(duck.x + duck.w / 2 - 15, duck.y));
+            }
+            
+            // Update score with combo
+            combo++;
+            comboTimer = 3000;
+            score += 10 * combo;
+            
+            document.getElementById("score").innerText = "Score: " + score;
+            document.getElementById("combo").innerText = "Combo: " + combo;
+            
+            sounds.hit.currentTime = 0;
+            sounds.hit.play();
+            
+            // Scare nearby ducks
+            ducks.forEach(otherDuck => {
+              const dx = otherDuck.x - duck.x;
+              const dy = otherDuck.y - duck.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              if (distance < 150) {
+                otherDuck.scare();
+              }
+            });
+            
+            break;
+          }
+        }
+      }
+      
+      // Update and draw eggs
+      for (let i = eggs.length - 1; i >= 0; i--) {
+        const egg = eggs[i];
+        const offScreen = egg.update();
+        egg.draw();
+        
+        if (offScreen) {
+          eggs.splice(i, 1);
+          continue;
+        }
+        
+        // Check for collision with player
+        if (egg.collidesWith(player)) {
+          eggs.splice(i, 1);
+          if (player.hit()) {
+            gameOver();
+            return;
+          }
+        }
+      }
+      
+      // Update and draw powerups
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        const powerup = powerups[i];
+        const offScreen = powerup.update();
+        powerup.draw();
+        
+        if (offScreen) {
+          powerups.splice(i, 1);
+          continue;
+        }
+        
+        // Check for collision with player
+        if (powerup.collidesWith(player)) {
+          activatePowerup(powerup);
+          powerups.splice(i, 1);
+        }
+      }
+      
+      // Advance wave if all enemies are defeated
+      if (ducks.length === 0 && boss === null && !isGameOver) {
+        if (wave % 5 !== 0) {
+          wave++;
+          document.getElementById("wave").innerText = "Wave: " + wave;
+          
+          // Spawn new ducks for next wave
+          const duckCount = Math.min(5, Math.floor(wave / 2) + 1);
+          for (let i = 0; i < duckCount; i++) {
+            spawnDuck();
+          }
+        }
+      }
+      
+      // Keep the game loop going
+      if (!isGameOver) {
+        requestAnimationFrame(loop);
+      }
+    }
+
+    // Make canvas responsive
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    // Start the game when everything is loaded
+    window.addEventListener("load", () => {
+      resetGame();
+    });
+  </script>
+</body>
+</html>
